@@ -1,0 +1,22 @@
+services:
+  backend-push:
+    container_name: "push-backend"
+    image: reflexfb17/web-push-back:v0.1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+
+  nginx-push:
+    container_name: "push-nginx"
+    depends_on:
+      - backend-push
+    image: reflexfb17/web-push-front:v0.1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "80:80"
+    env_file:
+      - .env

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Push Demo</title>
+  <link rel="stylesheet" href="./style.css?v=2">
+</head>
+<body>
+<div class="shell">
+  <p class="eyebrow">RFC 8030 · Web Push</p>
+  <h1>Web Push Demo</h1>
+  <p class="subtitle">A minimal client for subscribing to browser push notifications and sending a test push through your platform.</p>
+
+  <div class="config-hint">
+    Set your credentials in <code>server.py</code>: <code>PLATFORM_URL</code>, <code>CLIENT_ID</code>, <code>API_KEY</code>, <code>VAPID_PUBLIC_KEY</code>. The API key never reaches the browser — it stays on the server.
+  </div>
+
+  <div class="status-row">
+    <span class="dot" id="status-dot"></span>
+    <span id="status-text">Not subscribed</span>
+  </div>
+
+  <div class="panel">
+    <h2>1. Subscribe</h2>
+    <p class="desc">Register the service worker and request browser permission to receive push notifications.</p>
+    <button id="subscribe-btn">Subscribe to notifications</button>
+  </div>
+
+  <div class="panel">
+    <h2>2. Send a test push</h2>
+    <p class="desc">Compose a payload and send it to all subscribers through the platform.</p>
+
+    <label for="push-title">Title</label>
+    <input type="text" id="push-title" value="Hello from the platform">
+
+    <label for="push-body">Body</label>
+    <textarea id="push-body">This is a test push notification delivered via RFC 8030.</textarea>
+
+    <label for="push-url">Link (opened on click)</label>
+    <input type="text" id="push-url" value="/">
+
+    <label>Icon</label>
+    <div class="icon-grid">
+      <label class="icon-option">
+        <input type="radio" name="icon" value="./icons/icon-1.png" checked>
+        <img src="./icons/icon-1.png" alt="Bell icon">
+      </label>
+      <label class="icon-option">
+        <input type="radio" name="icon" value="./icons/icon-2.png">
+        <img src="./icons/icon-2.png" alt="Check icon">
+      </label>
+      <label class="icon-option">
+        <input type="radio" name="icon" value="./icons/icon-3.png">
+        <img src="./icons/icon-3.png" alt="Spark icon">
+      </label>
+      <label class="icon-option">
+        <input type="radio" name="icon" value="./icons/icon-4.png">
+        <img src="./icons/icon-4.png" alt="Dot icon">
+      </label>
+    </div>
+
+    <div class="actions">
+      <button id="send-btn" disabled>Send push</button>
+    </div>
+  </div>
+
+  <div class="panel log-panel">
+    <h2>Log</h2>
+    <div class="log" id="log"></div>
+  </div>
+</div>
+
+<script src="./app.js"></script>
+</body>
+</html>

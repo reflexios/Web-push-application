@@ -1,0 +1,256 @@
+openapi: 3.0.0
+
+info:
+  title: Push Platform API
+  description: API for managing Web Push subscriptions and sending push notifications.
+  version: "1.0.0"
+
+tags:
+  - name: Health
+    description: Service health check
+  - name: Subscriptions
+    description: Manage client push subscriptions
+  - name: Send
+    description: Send push notifications
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Returns the service status.
+      operationId: health
+      responses:
+        "200":
+          description: Service is running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+                service: push-platform
+
+  /subscriptions:
+    post:
+      tags: [Subscriptions]
+      summary: Create or update a push subscription
+      description: Upserts a subscription by (client_id, endpoint).
+      operationId: createSubscription
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSubscriptionRequest"
+      responses:
+        "201":
+          description: Subscription created or updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionCreated"
+        "400":
+          description: Malformed request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: >
+            Missing/malformed Authorization header, or the API key does not
+            match the given client_id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server / database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /send:
+    post:
+      tags: [Send]
+      summary: Send a push notification
+      description: Sends a push notification to one, several, or all of the client's subscriptions.
+      operationId: sendPush
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendRequest"
+      responses:
+        "200":
+          description: Delivery report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendReport"
+        "400":
+          description: >
+            Malformed request (e.g. none of subscription_id/subscription_ids/
+            to_all provided, subscription_ids is empty, or there are no
+            subscriptions to send to)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing/malformed Authorization header, or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server / database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: >
+        API key sent as `Authorization: Bearer <api_key>`.
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        service:
+          type: string
+          example: push-platform
+      required: [status, service]
+
+    SubscriptionKeys:
+      type: object
+      description: Web Push encryption keys
+      properties:
+        p256dh:
+          type: string
+          description: P-256 public key (base64url, 65 raw bytes)
+          pattern: '^[A-Za-z0-9_-]+$'
+        auth:
+          type: string
+          description: Auth secret (base64url, 16 raw bytes)
+          pattern: '^[A-Za-z0-9_-]+$'
+      required: [p256dh, auth]
+
+    SubscriptionData:
+      type: object
+      description: Browser push subscription object
+      properties:
+        endpoint:
+          type: string
+          format: uri
+          description: Push service endpoint URL
+          pattern: '^https://'
+        keys:
+          $ref: "#/components/schemas/SubscriptionKeys"
+      required: [endpoint, keys]
+
+    CreateSubscriptionRequest:
+      type: object
+      properties:
+        client_id:
+          type: string
+          format: uuid
+        subscription:
+          $ref: "#/components/schemas/SubscriptionData"
+        user_agent:
+          type: string
+          nullable: true
+      required: [client_id, subscription]
+
+    SubscriptionCreated:
+      type: object
+      properties:
+        subscription_id:
+          type: string
+          format: uuid
+        client_id:
+          type: string
+          format: uuid
+      required: [subscription_id, client_id]
+
+    SendRequest:
+      type: object
+      description: >
+        Exactly one of subscription_id, subscription_ids, or to_all=true
+        must be set.
+      properties:
+        subscription_id:
+          type: string
+          format: uuid
+          nullable: true
+        subscription_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          nullable: true
+        to_all:
+          type: boolean
+          default: false
+        payload:
+          description: Arbitrary JSON value sent as the notification body.
+        ttl:
+          type: integer
+          format: int32
+          nullable: true
+          description: Push message time-to-live, in seconds
+      required: [payload]
+
+    SendReport:
+      type: object
+      properties:
+        client_id:
+          type: string
+          format: uuid
+        requested:
+          type: integer
+          description: Number of subscriptions selected for sending
+        delivered:
+          type: integer
+        gone:
+          type: integer
+          description: Invalid subscriptions, deleted from the DB
+        failed:
+          type: integer
+        details:
+          type: object
+          description: >
+            Map of subscription_id to outcome: "delivered",
+            "gone - will be deleted", "retriable: {reason}",
+            "failed: {reason}", or "error: {e}".
+          additionalProperties:
+            type: string
+          example:
+            "3fa85f64-5717-4562-b3fc-2c963f66afa6": "delivered"
+            "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed": "gone - will be deleted"
+            "0c9f6a2e-df2b-4e8a-9f0a-9c1e2f3a4b5c": "retriable: upstream 503"
+            "7e2a1c3d-4f5b-6a7c-8d9e-0f1a2b3c4d5e": "failed: invalid vapid signature"
+      required: [client_id, requested, delivered, gone, failed, details]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+      example:
+        error: "invalid api_key for client_id"
