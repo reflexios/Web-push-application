@@ -1,0 +1,20 @@
+{
+    auto_https disable_redirects
+}
+
+{$SITE_ADDRESS} {
+	root * /usr/share/caddy/html
+	encode gzip
+
+	handle_path /api/* {
+		reverse_proxy {$BACKEND_UPSTREAM}
+	}
+
+	@static path *.js *.css *.png *.svg
+	header @static Cache-Control "public, max-age=2592000, immutable"
+
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}

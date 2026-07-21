@@ -1,22 +1,29 @@
 services:
   backend-push:
     container_name: "push-backend"
-    image: reflexfb17/web-push-back:v0.1
+    image: reflexfb17/web-push-back:v0.2
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "8080:8080"
+    volumes:
+      - socket-data:/tmp
     env_file:
       - .env
 
-  nginx-push:
-    container_name: "push-nginx"
+  frontend-push:
+    container_name: "push-frontend"
     depends_on:
       - backend-push
-    image: reflexfb17/web-push-front:v0.1
+    image: reflexfb17/web-push-front:v0.2
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "80:80"
+    volumes:
+      - socket-data:/tmp
     env_file:
       - .env
+
+volumes:
+  socket-data:

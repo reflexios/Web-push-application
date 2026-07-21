@@ -7,7 +7,6 @@ use crate::push::crypto::derive_key;
 
 #[derive(Clone)]
 pub struct AppConfig {
-    pub bind_addr: String,
     pub admin: Admin,
     pub default_vapid_subject: String,
     pub secure_mode: bool,
@@ -58,7 +57,6 @@ pub fn env_secs_opt(name: &str, default_secs: u64) -> anyhow::Result<Option<Dura
 impl AppConfig {
     pub fn from_env() -> anyhow::Result<Self> {
         Ok(Self {
-            bind_addr: env_string("BIND_ADDR", "0.0.0.0:8080"),
             default_vapid_subject: env_string("DEFAULT_VAPID_SUBJECT", "mailto:admin@example.com"),
             admin: Admin {
                 login: env_string("ADMIN_LOGIN", "admin"),
