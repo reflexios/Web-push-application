@@ -8,8 +8,14 @@ mod utils;
 use axum::Router;
 use axum::http::{HeaderValue, Method, header};
 use axum::routing::{get, post};
+use hyper::body::Incoming;
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::server;
+use std::env;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
+use tower::Service;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use web_push::IsahcWebPushClient;
@@ -38,10 +44,6 @@ async fn main() -> anyhow::Result<()> {
     let cfg = AppConfig::from_env()?;
     let pool = make_pool().await?;
     run_migrations(&pool).await?;
-
-    let addr: SocketAddr = cfg.bind_addr.parse()?;
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    tracing::info!("push-platform listening on http://{addr}");
 
     let push_client = Arc::new(IsahcWebPushClient::new()?);
     let config = Arc::new(cfg);
@@ -100,7 +102,51 @@ async fn main() -> anyhow::Result<()> {
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
-    axum::serve(listener, app).await?;
+    let use_socket = env::var("USE_UNIX_SOCKET")
+        .unwrap_or_default()
+        .parse::<bool>()
+        .unwrap_or(false);
+
+    if use_socket {
+        let socket_path = "/tmp/push-platform.sock";
+        let path = PathBuf::from(&socket_path);
+
+        let _ = std::fs::remove_file(&path);
+        std::fs::create_dir_all(path.parent().unwrap())?;
+
+        let uds = tokio::net::UnixListener::bind(&path)?;
+        tracing::info!("push-platform listening on unix socket {socket_path}");
+
+        let mut make_service = app.into_make_service();
+
+        loop {
+            let (socket, _remote_addr) = uds.accept().await?;
+            let tower_service = make_service.call(&socket).await?;
+
+            tokio::spawn(async move {
+                let socket = TokioIo::new(socket);
+
+                let hyper_service =
+                    hyper::service::service_fn(move |request: hyper::Request<Incoming>| {
+                        tower_service.clone().call(request)
+                    });
+
+                if let Err(err) = server::conn::auto::Builder::new(TokioExecutor::new())
+                    .serve_connection_with_upgrades(socket, hyper_service)
+                    .await
+                {
+                    tracing::error!("failed to serve connection: {err:#}");
+                }
+            });
+        }
+    } else {
+        let port = env_string("BACKEND_PORT", "8080");
+        let bind_addr = format!("0.0.0.0:{}", port);
+        let addr: SocketAddr = bind_addr.parse()?;
+        let listener = tokio::net::TcpListener::bind(addr).await?;
+        tracing::info!("push-platform listening on http://{addr}");
+        axum::serve(listener, app).await?;
+    }
 
     Ok(())
 }
